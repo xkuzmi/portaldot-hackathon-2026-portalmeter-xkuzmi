@@ -1,0 +1,30 @@
+{
+  "name": "portalmeter",
+  "version": "0.1.0",
+  "description": "Pay-per-request APIs on Portaldot: HTTP 402 + off-chain vouchers over on-chain tPOT payment channels",
+  "scripts": {
+    "test": "hardhat test",
+    "compile": "hardhat build"
+  },
+  "keywords": [
+    "portaldot",
+    "http-402",
+    "payment-channels",
+    "micropayments",
+    "ai-agents"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.12",
+    "@nomicfoundation/hardhat-node-test-runner": "^3.1.1",
+    "@nomicfoundation/hardhat-viem": "^3.0.10",
+    "@nomicfoundation/hardhat-viem-assertions": "^3.1.4",
+    "@polkadot/util": "^13.5.9",
+    "@polkadot/util-crypto": "^13.5.9",
+    "hardhat": "^3.20.0",
+    "solc": "^0.8.28",
+    "viem": "^2.56.8"
+  }
+}
