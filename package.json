@@ -4,7 +4,11 @@
   "description": "Pay-per-request APIs on Portaldot: HTTP 402 + off-chain vouchers over on-chain tPOT payment channels",
   "scripts": {
     "test": "hardhat test",
-    "compile": "hardhat build"
+    "compile": "hardhat build",
+    "deploy": "node scripts/deploy.js",
+    "api": "node demo/server.js",
+    "agent": "node demo/agent.js",
+    "node:local": "hardhat node --network localPortaldot"
   },
   "keywords": [
     "portaldot",

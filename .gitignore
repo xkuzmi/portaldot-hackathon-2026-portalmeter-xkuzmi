@@ -4,3 +4,4 @@ cache/
 types/
 .env
 *.local.json
+deployments/local.json

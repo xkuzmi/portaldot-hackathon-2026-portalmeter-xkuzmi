@@ -11,6 +11,8 @@ export default defineConfig({
     settings: { evmVersion: "cancun", optimizer: { enabled: true, runs: 200 } },
   },
   networks: {
+    // Local stand-in with Portaldot's chain id, for running the demo without testnet funds.
+    localPortaldot: { type: "edr-simulated", chainType: "l1", chainId: 420420777 },
     portaldot: {
       type: "http",
       chainType: "l1",

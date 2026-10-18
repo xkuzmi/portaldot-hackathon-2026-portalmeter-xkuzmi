@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PortalMeter Dashboard</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --card: #ffffff; --text: #16181d; --muted: #5b6270; --line: #e3e6ee;
+    --accent: #6c3cf0; --ok: #12805c; --warn: #b4610b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1116; --card: #171a21; --text: #e9ebf0; --muted: #9aa1ae; --line: #262a34; --accent: #9b7bff; --ok: #3fc58f; --warn: #f0a24b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 28px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+  h1 { margin: 0; font-size: 24px; }
+  h1 span { color: var(--accent); }
+  h2 { font-size: 16px; margin: 28px 0 10px; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .live { color: var(--ok); font-size: 13px; }
+  .live.stale { color: var(--warn); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 20px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .kpi b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .kpi small { color: var(--muted); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  tr:last-child td { border-bottom: 0; }
+  code { font: 13px ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .empty { padding: 16px; color: var(--muted); }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 10px; word-break: break-all; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Portal<span>Meter</span></h1>
+      <p class="sub">Pay-per-request API on Portaldot V3 — vouchers off-chain, settlement on-chain.</p>
+    </div>
+    <span id="live" class="live">connecting…</span>
+  </header>
+
+  <section class="kpis">
+    <div class="kpi"><b id="k-requests">–</b><small>paid requests</small></div>
+    <div class="kpi"><b id="k-channels">–</b><small>payment channels</small></div>
+    <div class="kpi"><b id="k-earned">–</b><small>tPOT earned (vouchers)</small></div>
+    <div class="kpi"><b id="k-settled">–</b><small>tPOT settled on-chain</small></div>
+    <div class="kpi"><b id="k-txratio">–</b><small>requests per on-chain tx</small></div>
+  </section>
+
+  <h2>Price list</h2>
+  <div class="card"><table><thead><tr><th>Endpoint</th><th>Price</th></tr></thead><tbody id="prices"></tbody></table></div>
+
+  <h2>Channels</h2>
+  <div class="card"><table><thead><tr><th>Channel</th><th>Payer</th><th>Requests</th><th>Voucher total</th><th>Unsettled</th><th>Last request</th></tr></thead><tbody id="channels"></tbody></table></div>
+
+  <h2>On-chain settlements</h2>
+  <div class="card"><table><thead><tr><th>When</th><th>Channel</th><th>Amount</th><th>Requests covered</th><th>Transaction</th></tr></thead><tbody id="settlements"></tbody></table></div>
+
+  <p class="meta" id="meta"></p>
+</main>
+<script>
+  const WEI = 10n ** 18n;
+  const tpot = (wei) => {
+    const v = BigInt(wei);
+    const whole = v / WEI;
+    const frac = (v % WEI).toString().padStart(18, "0").slice(0, 4).replace(/0+$/, "");
+    return frac ? `${whole}.${frac}` : `${whole}`;
+  };
+  const short = (h) => `${h.slice(0, 8)}…${h.slice(-6)}`;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const time = (iso) => (iso ? new Date(iso).toLocaleTimeString() : "–");
+  const fill = (id, rows, cols, emptyText) => {
+    document.getElementById(id).innerHTML = rows.length
+      ? rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")
+      : `<tr><td class="empty" colspan="${cols}">${emptyText}</td></tr>`;
+  };
+
+  async function loadPrices() {
+    const m = await (await fetch("/.well-known/portalmeter")).json();
+    fill("prices", m.endpoints.map((e) => [`<code>${esc(e.path)}</code>`, `${esc(e.priceTpot)} tPOT`]), 2, "No endpoints");
+  }
+
+  async function refresh() {
+    const live = document.getElementById("live");
+    try {
+      const s = await (await fetch("/api/meter/stats")).json();
+      const requests = s.channels.reduce((n, c) => n + c.requests, 0);
+      const earned = s.channels.reduce((n, c) => n + BigInt(c.latest), 0n);
+      const settled = s.channels.reduce((n, c) => n + BigInt(c.settled), 0n);
+      const txs = s.settlements.filter((x) => x.txHash).length;
+      document.getElementById("k-requests").textContent = requests;
+      document.getElementById("k-channels").textContent = s.channels.length;
+      document.getElementById("k-earned").textContent = tpot(earned);
+      document.getElementById("k-settled").textContent = tpot(settled);
+      document.getElementById("k-txratio").textContent = txs ? Math.round(requests / txs) : "–";
+
+      fill("channels", s.channels.map((c) => [
+        `<code>${short(c.channelId)}</code>`, `<code>${short(c.payer)}</code>`, c.requests,
+        tpot(c.latest), tpot(c.unsettled), time(c.updatedAt),
+      ]), 6, "No paid requests yet — run the agent.");
+      fill("settlements", s.settlements.map((x) => [
+        time(x.at), `<code>${short(x.channelId)}</code>`, `${tpot(x.amount)} tPOT`, x.requests, `<code>${esc(x.txHash)}</code>`,
+      ]), 5, "Nothing settled yet — the server redeems vouchers in batches.");
+      document.getElementById("meta").textContent =
+        `Contract ${s.contract} · payee ${s.payee} · chain ${s.chainId}` + (s.deployment?.txHash ? ` · deployed in ${s.deployment.txHash}` : "");
+      live.textContent = `live · ${new Date().toLocaleTimeString()}`;
+      live.classList.remove("stale");
+    } catch {
+      live.textContent = "server unreachable";
+      live.classList.add("stale");
+    }
+  }
+
+  loadPrices().catch(() => {});
+  refresh();
+  setInterval(refresh, 3000);
+</script>
+</body>
+</html>
